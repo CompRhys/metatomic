@@ -58,3 +58,15 @@ def test_non_atomisticmodel_scriptmodule_raises_typeerror():
     dummy_scripted = torch.jit.script(Dummy())
     with pytest.raises(TypeError, match="must be 'AtomisticModel'"):
         MetatomicModel(model=dummy_scripted, device=DEVICE)
+
+
+
+def test_variants_parameter_accepted(lj_model):
+    """Variants parameter is accepted even for models without variants."""
+    # The LJ test model has no variants, but the parameter should be accepted
+    model = MetatomicModel(model=lj_model, device=DEVICE, variants=None)
+    assert model._energy_key == "energy"
+
+    # Explicit empty variants dict should also work
+    model = MetatomicModel(model=lj_model, device=DEVICE, variants={})
+    assert model._energy_key == "energy"

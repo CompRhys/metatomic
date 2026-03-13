@@ -24,6 +24,7 @@ from metatomic.torch import (
     System,
     load_atomistic_model,
     pick_device,
+    pick_output,
 )
 
 
@@ -75,6 +76,7 @@ class MetatomicModel(ModelInterface):
         check_consistency: bool = False,
         compute_forces: bool = True,
         compute_stress: bool = True,
+        variants: Optional[Dict[str, Optional[str]]] = None,
     ) -> None:
         """Initialize the metatomic model wrapper.
 
@@ -91,6 +93,9 @@ class MetatomicModel(ModelInterface):
             Useful for debugging but hurts performance.
         :param compute_forces: Compute atomic forces via autograd.
         :param compute_stress: Compute stress tensors via the strain trick.
+        :param variants: Dictionary mapping output names to variant names. If not
+            provided, the default variant is used for all outputs. See
+            :py:func:`metatomic.torch.pick_output` for details on variant selection.
         """
         super().__init__()
 
@@ -149,6 +154,10 @@ class MetatomicModel(ModelInterface):
                 "Only models with energy outputs can be used with TorchSim."
             )
 
+        # Resolve output variants
+        variants = variants or {}
+        self._energy_key = pick_output("energy", capabilities.outputs, variants.get("energy"))
+
         self._model = model.to(device=self._device)
         self._compute_forces = compute_forces
         self._compute_stress = compute_stress
@@ -158,7 +167,7 @@ class MetatomicModel(ModelInterface):
         self._evaluation_options = ModelEvaluationOptions(
             length_unit="angstrom",
             outputs={
-                "energy": ModelOutput(quantity="energy", unit="eV", per_atom=False)
+                self._energy_key: ModelOutput(quantity="energy", unit="eV", per_atom=False)
             },
         )
 
@@ -243,8 +252,7 @@ class MetatomicModel(ModelInterface):
             check_consistency=self._check_consistency,
         )
 
-        energy_values = model_outputs["energy"].block().values
-
+        energy_values = model_outputs[self._energy_key].block().values
         results: Dict[str, torch.Tensor] = {}
         results["energy"] = energy_values.detach().squeeze(-1)
 
